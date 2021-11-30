@@ -39,6 +39,7 @@ class primeOutputBuffer {
            return result;
        }
        int size() { return theQueue.size(); }
+       unsigned long long peekBack() { return theQueue.back(); }
 };
 
 struct WorkerContext {
@@ -50,7 +51,7 @@ struct WorkerContext {
   bool shouldBeRunning = true;
 };
 
-int primeFinderWorker(WorkerContext* context) {
+int primeFinderWorker(volatile WorkerContext* context) {
   context->running = true;
   for (unsigned long long i = context->start; context->running; i += context->increment) {
     if (isPrime(i)) {
@@ -58,6 +59,7 @@ int primeFinderWorker(WorkerContext* context) {
       context->foundPrimes++;
     }
     if (!context->shouldBeRunning) {
+      this_thread::sleep_for(chrono::milliseconds(100));
       context->running = false;
     }
 }
@@ -66,11 +68,11 @@ return 0;
 
 int main (int argc, char** argv) {
   auto numWorkers = thread::hardware_concurrency();
-  WorkerContext contexts[numWorkers];
+  volatile WorkerContext contexts[numWorkers];
   primeOutputBuffer outputBuffer;
   cout << "Starting calculation..." << endl;
   for (int i = 0; i < numWorkers; i ++) {
-    WorkerContext& context = contexts[i];
+    volatile WorkerContext& context = contexts[i];
     context.start = i + 2;
     context.increment = numWorkers;
     context.outputBuffer = &outputBuffer;
@@ -79,7 +81,7 @@ int main (int argc, char** argv) {
   }
   int targetNumberOfPrimes = atoi(argv[1]);
   while (outputBuffer.size() < targetNumberOfPrimes) {
-    cout << outputBuffer.size() << "\t\r";
+    cout << outputBuffer.size() << ": " << outputBuffer.peekBack() << "\t\r";
     this_thread::sleep_for(chrono::milliseconds(100));
   }
   cout << "Stopping worker threads" << endl;
@@ -87,9 +89,10 @@ int main (int argc, char** argv) {
     contexts[i].shouldBeRunning = false;
     cout << "Stopping worker thread " << i << ": ";
     while (contexts[i].running)
-      ;
+    ;
     cout << "Done" << endl;
   }
     cout << "Found " << outputBuffer.size() << " primes" << endl;
-  return 0;
+    cout << "Last prime: " << outputBuffer.peekBack() << endl;
+    return 0;
 }
