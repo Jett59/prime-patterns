@@ -33,7 +33,7 @@ class primeOutputBuffer {
        }
        unsigned long long pop() {
            unique_lock<mutex> lock(theMutex);
-           unsigned long long result = theQueue.back();
+           unsigned long long result = theQueue.front();
            theQueue.pop();
            lock.unlock();
            return result;
@@ -46,34 +46,50 @@ struct WorkerContext {
   int increment;
   int foundPrimes = 0;
   primeOutputBuffer* outputBuffer;
+  bool running = false;
+  bool shouldBeRunning = true;
 };
 
 int primeFinderWorker(WorkerContext* context) {
-    for (unsigned long long i = context->start;; i += context->increment) {
-if (isPrime(i)) {
-  context->outputBuffer->push(i);
-  context->foundPrimes++;
+  context->running = true;
+  for (unsigned long long i = context->start; context->running; i += context->increment) {
+    if (isPrime(i)) {
+      context->outputBuffer->push(i);
+      context->foundPrimes++;
+    }
+    if (!context->shouldBeRunning) {
+      context->running = false;
+    }
 }
-}
+return 0;
 }
 
 int main (int argc, char** argv) {
   auto numWorkers = thread::hardware_concurrency();
   WorkerContext contexts[numWorkers];
   primeOutputBuffer outputBuffer;
+  cout << "Starting calculation..." << endl;
   for (int i = 0; i < numWorkers; i ++) {
-    WorkerContext context;
+    WorkerContext& context = contexts[i];
     context.start = i + 2;
     context.increment = numWorkers;
     context.outputBuffer = &outputBuffer;
-    contexts[i] = context;
     thread workerThread(primeFinderWorker, &contexts[i]);
     workerThread.detach();
   }
-  while (true) {
-      while (outputBuffer.size() < 1)
-        ;
-      cout << outputBuffer.pop() << " with " << outputBuffer.size() << "Remaining" << endl;
+  int targetNumberOfPrimes = atoi(argv[1]);
+  while (outputBuffer.size() < targetNumberOfPrimes) {
+    cout << outputBuffer.size() << "\t\r";
+    this_thread::sleep_for(chrono::milliseconds(100));
   }
+  cout << "Stopping worker threads" << endl;
+  for (int i = 0; i < numWorkers; i ++) {
+    contexts[i].shouldBeRunning = false;
+    cout << "Stopping worker thread " << i << ": ";
+    while (contexts[i].running)
+      ;
+    cout << "Done" << endl;
+  }
+    cout << "Found " << outputBuffer.size() << " primes" << endl;
   return 0;
 }
