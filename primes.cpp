@@ -59,7 +59,6 @@ int primeFinderWorker(volatile WorkerContext* context) {
       context->foundPrimes++;
     }
     if (!context->shouldBeRunning) {
-      this_thread::sleep_for(chrono::milliseconds(100));
       context->running = false;
     }
 }
