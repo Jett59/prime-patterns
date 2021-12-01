@@ -1,45 +1,75 @@
+#include <atomic>
+#include <string>
+#include <algorithm>
 #include <iostream>
+#include <fstream>
 #include <cstdlib>
 #include <cmath>
 #include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <queue>
+#include <deque>
 
 template<typename IntType>
 constexpr bool isDivisible(IntType dividend, IntType divisor) {
     return dividend % divisor == 0;
 }
 template<typename IntType>
-constexpr bool internalNotIsPrime(IntType n, IntType testNumber) {
-    return isDivisible<IntType>(n, testNumber) ? true : (testNumber <= n / 2) ? internalNotIsPrime(n, testNumber + 1) : false;
+constexpr bool internalNotIsPrime(IntType n, IntType testNumber, IntType top) {
+  return testNumber <= top ? isDivisible(n, testNumber)
+                                 ? true
+                                 : internalNotIsPrime(n, testNumber + 1, top) : false;
 }
 template<typename IntType>
 constexpr bool isPrime(IntType n) {
-    return n == 2 ? true : !internalNotIsPrime<IntType>(n, 2);
+    return n == 2 ? true : !internalNotIsPrime<IntType>(n, 2, static_cast<IntType>(sqrt(static_cast<double>(n))));
 }
 
 using namespace std;
 
+class SpinLock {
+  private:
+   atomic_flag flag = ATOMIC_FLAG_INIT;
+   public:
+   void acquire() {
+     while (flag.test_and_set(memory_order_acquire))
+       ;
+   }
+   void release() { flag.clear(memory_order_release); }
+};
+
 class primeOutputBuffer {
     private:
-     mutex theMutex;
-     queue<unsigned long long> theQueue;
-     public:
-      void push(unsigned long long value) {
-          unique_lock<mutex> lock(theMutex);
-          theQueue.push(value);
-          lock.unlock();
+     SpinLock lock;
+     deque<unsigned long long> theQueue;
+    public:
+     void push(unsigned long long value) {
+       lock.acquire();
+       theQueue.push_back(value);
+       lock.release();
        }
        unsigned long long pop() {
-           unique_lock<mutex> lock(theMutex);
-           unsigned long long result = theQueue.front();
-           theQueue.pop();
-           lock.unlock();
-           return result;
+         lock.acquire();
+         unsigned long long result = theQueue.front();
+         theQueue.pop_front();
+         lock.release();
+         return result;
        }
-       int size() { return theQueue.size(); }
-       unsigned long long peekBack() { return theQueue.back(); }
+       int size() {
+         lock.acquire();
+         int result = theQueue.size();
+         lock.release();
+         return result;
+          }
+          unsigned long long peekBack() {
+            lock.acquire();
+            unsigned long long result = theQueue.back();
+            lock.release();
+            return result;
+           }
+           void sort () {
+             lock.acquire();
+             std::sort(theQueue.begin(), theQueue.end());
+             lock.release();
+           }
 };
 
 struct WorkerContext {
@@ -72,8 +102,8 @@ int main (int argc, char** argv) {
   cout << "Starting calculation..." << endl;
   for (int i = 0; i < numWorkers; i ++) {
     volatile WorkerContext& context = contexts[i];
-    context.start = i + 2;
-    context.increment = numWorkers;
+    context.start = i * 2 + 3; // Only odd numbers can be prime (except 2)
+    context.increment = numWorkers * 2;
     context.outputBuffer = &outputBuffer;
     thread workerThread(primeFinderWorker, &contexts[i]);
     workerThread.detach();
@@ -89,9 +119,22 @@ int main (int argc, char** argv) {
     cout << "Stopping worker thread " << i << ": ";
     while (contexts[i].running)
     ;
-    cout << "Done" << endl;
+    cout << "Done (it found " << contexts[i].foundPrimes << " primes)" << endl;
   }
     cout << "Found " << outputBuffer.size() << " primes" << endl;
+    cout << "Sorting..." << endl;
+    outputBuffer.sort();
     cout << "Last prime: " << outputBuffer.peekBack() << endl;
+    cout << "Building textual representation..." << endl;
+    string outputString = "";
+    for (int i = 0; outputBuffer.size() > 0; i ++) {
+      outputString += outputBuffer.pop();
+      outputString += '\n';
+    }
+    cout << "Writing to 'primes.txt'..." << endl;
+    ofstream output("primes.txt");
+    output << outputString;
+    output.close();
+    cout << "Done!" << endl;
     return 0;
 }
