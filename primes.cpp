@@ -1,13 +1,11 @@
-#include <atomic>
 #include <string>
-#include <algorithm>
 #include <iostream>
-#include <fstream>
 #include <cstdlib>
 #include <cmath>
 #include <thread>
-#include <deque>
+#include "primes.h"
 
+namespace primes {
 template<typename IntType>
 constexpr bool isDivisible(IntType dividend, IntType divisor) {
     return dividend % divisor == 0;
@@ -25,63 +23,16 @@ constexpr bool isPrime(IntType n) {
 
 using namespace std;
 
-class SpinLock {
-  private:
-   atomic_flag flag = ATOMIC_FLAG_INIT;
-   public:
-   void acquire() {
-     while (flag.test_and_set(memory_order_acquire))
-       ;
-   }
-   void release() { flag.clear(memory_order_release); }
-};
-
-class primeOutputBuffer {
-    private:
-     SpinLock lock;
-     deque<unsigned long long> theQueue;
-    public:
-     void push(unsigned long long value) {
-       lock.acquire();
-       theQueue.push_back(value);
-       lock.release();
-       }
-       unsigned long long pop() {
-         lock.acquire();
-         unsigned long long result = theQueue.front();
-         theQueue.pop_front();
-         lock.release();
-         return result;
-       }
-       int size() {
-         lock.acquire();
-         int result = theQueue.size();
-         lock.release();
-         return result;
-          }
-          unsigned long long peekBack() {
-            lock.acquire();
-            unsigned long long result = theQueue.back();
-            lock.release();
-            return result;
-           }
-           void sort () {
-             lock.acquire();
-             std::sort(theQueue.begin(), theQueue.end());
-             lock.release();
-           }
-};
-
 struct WorkerContext {
     int start;
   int increment;
   int foundPrimes = 0;
-  primeOutputBuffer* outputBuffer;
+  PrimeOutputBuffer* outputBuffer;
   bool running = false;
   bool shouldBeRunning = true;
 };
 
-int primeFinderWorker(volatile WorkerContext* context) {
+static int primeFinderWorker(volatile WorkerContext* context) {
   context->running = true;
   for (unsigned long long i = context->start; context->running; i += context->increment) {
     if (isPrime(i)) {
@@ -95,10 +46,9 @@ int primeFinderWorker(volatile WorkerContext* context) {
 return 0;
 }
 
-int main (int argc, char** argv) {
+void getPrimes(int numPrimes, PrimeOutputBuffer& outputBuffer) {
   auto numWorkers = thread::hardware_concurrency();
   volatile WorkerContext contexts[numWorkers];
-  primeOutputBuffer outputBuffer;
   cout << "Starting calculation..." << endl;
   for (int i = 0; i < numWorkers; i ++) {
     volatile WorkerContext& context = contexts[i];
@@ -108,8 +58,7 @@ int main (int argc, char** argv) {
     thread workerThread(primeFinderWorker, &contexts[i]);
     workerThread.detach();
   }
-  int targetNumberOfPrimes = atoi(argv[1]);
-  while (outputBuffer.size() < targetNumberOfPrimes) {
+  while (outputBuffer.size() < numPrimes) {
     cout << outputBuffer.size() << ": " << outputBuffer.peekBack() << "\t\r";
     this_thread::sleep_for(chrono::milliseconds(100));
   }
@@ -124,17 +73,6 @@ int main (int argc, char** argv) {
     cout << "Found " << outputBuffer.size() << " primes" << endl;
     cout << "Sorting..." << endl;
     outputBuffer.sort();
-    cout << "Last prime: " << outputBuffer.peekBack() << endl;
-    cout << "Building textual representation..." << endl;
-    string outputString = "";
-    for (int i = 0; outputBuffer.size() > 0; i ++) {
-      outputString += outputBuffer.pop();
-      outputString += '\n';
-    }
-    cout << "Writing to 'primes.txt'..." << endl;
-    ofstream output("primes.txt");
-    output << outputString;
-    output.close();
-    cout << "Done!" << endl;
-    return 0;
+    cout << "Last prime: " << outputBuffer.peekBack() << endl;    
+}
 }
