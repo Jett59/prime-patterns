@@ -1,1 +1,1 @@
-# prime-finder
+# prime-patterns
