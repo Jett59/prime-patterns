@@ -1,5 +1,7 @@
 #include "primes.h"
 #include <iostream>
+#include <fstream>
+#include <string>
 
 static const int numPrimes = 1000000;
 
@@ -38,6 +40,14 @@ double computeMedian(PrimeOutputBuffer& input) {
         getPrimes(numPrimes, primes);
         PrimeOutputBuffer deltas;
         computeDeltas(primes, deltas);
+        string deltasString = "";
+        for (int i = 0; i < deltas.size(); i ++) {
+          deltasString += to_string(deltas[i]) + '\n';
+        }
+        ofstream deltasOutput("deltas.txt");
+        deltasOutput << deltasString;
+        deltasOutput.close();
+        cout << "Wrote deltas to 'deltas.txt'" << endl;
         double meanDelta = computeMean(deltas);
         cout << "Mean delta: " << meanDelta << endl;
         deltas.sort();
