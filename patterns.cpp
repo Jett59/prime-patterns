@@ -23,6 +23,16 @@ static void computeDeltas(PrimeOutputBuffer& input, PrimeOutputBuffer& output) {
     return (double)counter / (double)input.size();
     }
 
+double computeMedian(PrimeOutputBuffer& input) {
+  if (input.size() %2 == 1) {
+    return (double)input[input.size() / 2 + 1];
+  }else {
+    return ((double)input[input.size() / 2] +
+            (double)input[input.size() / 2 + 1]) /
+           2;
+  }
+}
+
     int main() {
         PrimeOutputBuffer primes;
         getPrimes(numPrimes, primes);
@@ -30,5 +40,8 @@ static void computeDeltas(PrimeOutputBuffer& input, PrimeOutputBuffer& output) {
         computeDeltas(primes, deltas);
         double meanDelta = computeMean(deltas);
         cout << "Mean delta: " << meanDelta << endl;
+        deltas.sort();
+        double medianDelta = computeMedian(deltas);
+        cout << "Median delta: " << medianDelta << endl;
         return 0;
     }
