@@ -100,7 +100,8 @@ int main (int argc, char** argv) {
   volatile WorkerContext contexts[numWorkers];
   primeOutputBuffer outputBuffer;
   cout << "Starting calculation..." << endl;
-  for (int i = 0; i < numWorkers; i ++) {
+  outputBuffer.push(2); // Only prime not found by the program
+  for (int i = 0; i < numWorkers; i++) {
     volatile WorkerContext& context = contexts[i];
     context.start = i * 2 + 3; // Only odd numbers can be prime (except 2)
     context.increment = numWorkers * 2;
@@ -128,7 +129,7 @@ int main (int argc, char** argv) {
     cout << "Building textual representation..." << endl;
     string outputString = "";
     for (int i = 0; outputBuffer.size() > 0; i ++) {
-      outputString += outputBuffer.pop();
+      outputString += to_string(outputBuffer.pop());
       outputString += '\n';
     }
     cout << "Writing to 'primes.txt'..." << endl;
